@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+.vscode/
+.idea/
+*.bak_tmp
+*.tmp
+*.exe
+Thumbs.db
+desktop.ini

@@ -1,0 +1,161 @@
+# CI Chunks Windows - 14s harness compliant test runner
+# Each chunk runs as a separate matrix job to stay under timeout limits
+#
+# Chunks: core, p22, p23, p24, p25, p26
+# Total: 6 parallel jobs, each < 14s target
+#
+# Python: 3.14 default (matches local dev environment)
+# UTF-8: Disabled by default (enable via workflow_dispatch input)
+
+name: CI Chunks (Windows)
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      # Test infrastructure
+      - 'scripts/**'
+      - 'tests/**'
+      - 'pytest.ini'
+      - 'run_tests.py'
+      # Core modules
+      - 'src/**'
+      - 'execution/**'
+      - 'adapters/**'
+      - 'examples/**'
+      - 'costs/**'
+      - 'phase1_anchor_engine.py'
+      # Documentation
+      - 'docs/**'
+      # Dependencies
+      - 'requirements.txt'
+      - 'requirements-dev.txt'
+      - 'pyproject.toml'
+      - 'setup.py'
+      - 'setup.cfg'
+      # This workflow
+      - '.github/workflows/ci_chunks_windows.yml'
+
+  pull_request:
+    branches: [main, master, develop]
+
+  workflow_dispatch:
+    inputs:
+      enable_utf8:
+        description: 'Enable PYTHONUTF8=1 for UTF-8 mode'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+      python_version:
+        description: 'Python version to test'
+        required: false
+        default: '3.14'
+        type: choice
+        options:
+          - '3.14'
+          - '3.13'
+          - '3.12'
+
+jobs:
+  test-chunks:
+    name: Test ${{ matrix.chunk }}
+    runs-on: windows-latest
+    timeout-minutes: 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        chunk: [core, p22, p23, p24, p25, p26]
+        include:
+          - chunk: core
+            description: "Phase 2 core (3 files)"
+          - chunk: p22
+            description: "Phase 2.2 event builder"
+          - chunk: p23
+            description: "Phase 2.3 guardrails"
+          - chunk: p24
+            description: "Phase 2.4 filter impact"
+          - chunk: p25
+            description: "Phase 2.5 distortion"
+          - chunk: p26
+            description: "Phase 2.6 recommendation"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ github.event.inputs.python_version || '3.14' }}
+          cache: 'pip'
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+            pyproject.toml
+            setup.py
+
+      # Conditionally enable PYTHONUTF8 only when explicitly requested via workflow_dispatch
+      - name: Configure UTF-8 mode (if enabled)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.enable_utf8 == 'true'
+        shell: bash
+        run: echo "PYTHONUTF8=1" >> $GITHUB_ENV
+
+      - name: Create virtual environment
+        shell: cmd
+        run: python -m venv .venv
+
+      - name: Install dependencies
+        shell: cmd
+        run: |
+          .venv\Scripts\python.exe -m pip install -U pip
+          REM Try requirements-dev.txt first, then requirements.txt, else minimal deps
+          if exist requirements-dev.txt (
+            .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+          ) else if exist requirements.txt (
+            .venv\Scripts\python.exe -m pip install -r requirements.txt
+          ) else (
+            .venv\Scripts\python.exe -m pip install numpy pandas pytest
+          )
+          REM Install package if pyproject.toml or setup.py exists
+          if exist pyproject.toml (
+            .venv\Scripts\python.exe -m pip install -e .
+          ) else if exist setup.py (
+            .venv\Scripts\python.exe -m pip install -e .
+          )
+
+      - name: Run test chunk - ${{ matrix.chunk }}
+        id: test
+        shell: cmd
+        run: |
+          echo [CI] Running chunk: ${{ matrix.chunk }}
+          echo [CI] Description: ${{ matrix.description }}
+          echo [CI] Python: ${{ github.event.inputs.python_version || '3.14' }}
+          scripts\run_ci_chunks.cmd ${{ matrix.chunk }}
+
+      - name: Write job summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## Test Results: ${{ matrix.chunk }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Chunk** | \`${{ matrix.chunk }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Description** | ${{ matrix.description }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Python** | ${{ github.event.inputs.python_version || '3.14' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ steps.test.outcome }} |" >> $GITHUB_STEP_SUMMARY
+
+  summary:
+    name: All Chunks Summary
+    needs: test-chunks
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Report final status
+        run: |
+          echo "## CI Chunks Summary"
+          echo "All chunk jobs completed. Check individual job results above."
