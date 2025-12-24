@@ -1,0 +1,23 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Windows batch/PowerShell scripts must use CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Python files use LF
+*.py text eol=lf
+
+# YAML/JSON use LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+
+# Markdown uses LF
+*.md text eol=lf
+
+# Keep binary files as-is
+*.exe binary
+*.dll binary
+*.pyd binary

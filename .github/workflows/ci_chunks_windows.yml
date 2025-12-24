@@ -112,12 +112,15 @@ jobs:
         shell: cmd
         run: |
           .venv\Scripts\python.exe -m pip install -U pip
-          REM Try requirements-dev.txt first, then requirements.txt, else minimal deps
+          REM Install both requirements.txt (runtime) and requirements-dev.txt (test)
+          if exist requirements.txt (
+            .venv\Scripts\python.exe -m pip install -r requirements.txt
+          )
           if exist requirements-dev.txt (
             .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-          ) else if exist requirements.txt (
-            .venv\Scripts\python.exe -m pip install -r requirements.txt
-          ) else (
+          )
+          REM Fallback if neither exists
+          if not exist requirements.txt if not exist requirements-dev.txt (
             .venv\Scripts\python.exe -m pip install numpy pandas pytest
           )
           REM Install package if pyproject.toml or setup.py exists
