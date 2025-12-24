@@ -17,6 +17,11 @@
 # Markdown uses LF
 *.md text eol=lf
 
+# Config files use LF
+*.ini text eol=lf
+*.cfg text eol=lf
+*.toml text eol=lf
+
 # Keep binary files as-is
 *.exe binary
 *.dll binary
