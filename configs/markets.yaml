@@ -1,0 +1,62 @@
+# Market configuration for multi-market backtesting pipeline
+# Data root: E:\data\crypto_ohlcv (external, not in repo)
+# Generated: 2024-12-25
+
+markets:
+  upbit_krw:
+    enabled: true
+    root: "E:\\data\\crypto_ohlcv\\upbit"
+    file_glob: "*.csv"
+    timeframe: "1d"
+    timezone: "UTC"  # normalize_data will handle timezone conversion
+    quote_currency: "KRW"
+    market_type: "spot"
+    fee_bps_roundtrip: 10
+    slippage_bps_roundtrip: 2
+
+  bithumb_krw:
+    enabled: true
+    root: "E:\\data\\crypto_ohlcv\\bithumb"
+    file_glob: "*.csv"
+    timeframe: "1d"
+    timezone: "UTC"
+    quote_currency: "KRW"
+    market_type: "spot"
+    fee_bps_roundtrip: 10
+    slippage_bps_roundtrip: 2
+
+  binance_spot:
+    enabled: false  # No daily data available (only 1h/4h)
+    root: "E:\\data\\crypto_ohlcv\\binance_spot"
+    file_glob: "*.csv"
+    timeframe: "1d"
+    timezone: "UTC"
+    quote_currency: "USDT"
+    market_type: "spot"
+    fee_bps_roundtrip: 10
+    slippage_bps_roundtrip: 2
+    note: "DISABLED - daily data not available, only 1h/4h exists"
+
+  binance_futures:
+    enabled: true
+    root: "E:\\data\\crypto_ohlcv\\binance_futures"
+    file_glob: "*.csv"
+    timeframe: "1d"
+    timezone: "UTC"
+    quote_currency: "USDT"
+    market_type: "futures"
+    fee_bps_roundtrip: 8
+    slippage_bps_roundtrip: 3
+    funding_included: false
+
+# Common schema for normalized data
+normalized_schema:
+  columns:
+    - date        # YYYY-MM-DD
+    - symbol      # extracted from filename
+    - open
+    - high
+    - low
+    - close
+    - volume
+  date_format: "%Y-%m-%d"

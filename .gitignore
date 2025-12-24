@@ -11,3 +11,10 @@ __pycache__/
 *.exe
 Thumbs.db
 desktop.ini
+
+# generated outputs (do not commit)
+outputs/
+
+# local datasets (do not commit)
+data/raw/
+data/cache/
