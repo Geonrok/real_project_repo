@@ -26,7 +26,7 @@ markets:
     slippage_bps_roundtrip: 2
 
   binance_spot:
-    enabled: false  # No daily data available (only 1h/4h)
+    enabled: true
     root: "E:\\data\\crypto_ohlcv\\binance_spot"
     file_glob: "*.csv"
     timeframe: "1d"
@@ -35,7 +35,6 @@ markets:
     market_type: "spot"
     fee_bps_roundtrip: 10
     slippage_bps_roundtrip: 2
-    note: "DISABLED - daily data not available, only 1h/4h exists"
 
   binance_futures:
     enabled: true
