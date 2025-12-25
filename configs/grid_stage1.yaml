@@ -1,0 +1,93 @@
+# Stage1 Strategy Grid Configuration
+# Purpose: Define parameter combinations for initial strategy screening
+# Constraint: ~50-100 combinations to avoid combinatorial explosion
+#
+# Grid expansion: 7 trend × 1 momentum × 5 regime × 2 mode = 70 combinations
+
+# Trend indicators (primary signal)
+trend_slot:
+  - KAMA        # Kaufman Adaptive Moving Average
+  - VIDYA       # Variable Index Dynamic Average
+  - BOLL_MID    # Bollinger Band Middle (SMA20)
+  - SUPERTREND  # Supertrend indicator
+  - FRAMA       # Fractal Adaptive Moving Average
+  - ZLEMA       # Zero Lag EMA
+  - VMA         # Variable Moving Average
+
+# Default parameters for trend indicators
+trend_params:
+  KAMA:
+    period: 10
+    fast: 2
+    slow: 30
+  VIDYA:
+    period: 14
+    cmo_period: 9
+  BOLL_MID:
+    period: 20
+  SUPERTREND:
+    period: 10
+    multiplier: 3.0
+  FRAMA:
+    period: 16
+  ZLEMA:
+    period: 20
+  VMA:
+    period: 20
+
+# Momentum indicator (fixed for Stage1, expand in Stage2)
+momentum_slot:
+  - TSMOM_30    # 30-day time-series momentum
+
+momentum_params:
+  TSMOM_30:
+    lookback: 30
+    method: "log_return"  # Options: log_return, simple_return
+
+# Regime filters (market condition filters)
+regime_slot:
+  - BTC_GT_MA50        # BTC > MA50(BTC)
+  - ETH_GT_MA50        # ETH > MA50(ETH)
+  - BTC_OR_ETH_GT_MA50 # BTC > MA50(BTC) OR ETH > MA50(ETH)
+  - SCORE_AVG_GT_1     # (BTC/MA50_BTC + ETH/MA50_ETH)/2 > 1.0
+  - INDEX_GT_MA50      # Index(0.5*BTC + 0.5*ETH) > MA50(Index)
+
+regime_params:
+  ma_period: 50
+
+# Regime application mode
+regime_mode:
+  - GATE    # Binary: vol_target = 0 (off) or vol_target_base (on)
+  - SIZING  # Continuous: vol_target scales 0 to vol_target_base based on regime strength
+
+# Volatility targeting
+vol_target_base: 0.30  # 30% annualized volatility target
+
+# Regime source (which market's BTC/ETH to use for regime calculation)
+# Options: reference_market (binance_spot), per_market
+regime_source: reference_market
+reference_market: binance_spot
+
+# Backtest settings
+backtest:
+  position_type: long_only  # long_only for Stage1
+  rebalance_freq: daily
+  initial_capital: 10000
+
+# Entry/Exit logic
+entry_logic:
+  # Entry: (TrendUp OR MomentumPositive) AND RegimeOK
+  trend_condition: "price > trend_indicator"
+  momentum_condition: "tsmom > 0"
+  regime_condition: "regime_flag == 1"
+
+exit_logic:
+  # Exit: (TrendDown AND MomentumNegative) OR RegimeFail
+  trend_condition: "price < trend_indicator"
+  momentum_condition: "tsmom < 0"
+  regime_condition: "regime_flag == 0"
+
+# Evaluation modes
+eval_modes:
+  - full          # Full available period per market
+  - intersection  # Common date range across all markets
