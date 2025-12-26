@@ -1,0 +1,72 @@
+{
+  "generated_utc": "2025-12-26T17:09:17.552119+00:00",
+  "total_candidates": 18,
+  "final_candidates_count": 18,
+  "final_candidates": [
+    "BOLL_MID_TSMOM_30_ETH_GT_MA50_GATE",
+    "BOLL_MID_TSMOM_30_ETH_GT_MA50_SIZING",
+    "BOLL_MID_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "KAMA_TSMOM_30_ETH_GT_MA50_GATE",
+    "KAMA_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "SUPERTREND_TSMOM_30_ETH_GT_MA50_GATE",
+    "SUPERTREND_TSMOM_30_ETH_GT_MA50_SIZING",
+    "SUPERTREND_TSMOM_30_INDEX_GT_MA50_GATE",
+    "SUPERTREND_TSMOM_30_INDEX_GT_MA50_SIZING",
+    "SUPERTREND_TSMOM_30_SCORE_AVG_GT_1_GATE",
+    "SUPERTREND_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "VIDYA_TSMOM_30_ETH_GT_MA50_GATE",
+    "VIDYA_TSMOM_30_ETH_GT_MA50_SIZING",
+    "VIDYA_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "VMA_TSMOM_30_ETH_GT_MA50_GATE",
+    "VMA_TSMOM_30_ETH_GT_MA50_SIZING",
+    "VMA_TSMOM_30_SCORE_AVG_GT_1_GATE",
+    "VMA_TSMOM_30_SCORE_AVG_GT_1_SIZING"
+  ],
+  "final_with_warn_count": 18,
+  "final_with_warn": [
+    "BOLL_MID_TSMOM_30_ETH_GT_MA50_GATE",
+    "BOLL_MID_TSMOM_30_ETH_GT_MA50_SIZING",
+    "BOLL_MID_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "KAMA_TSMOM_30_ETH_GT_MA50_GATE",
+    "KAMA_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "SUPERTREND_TSMOM_30_ETH_GT_MA50_GATE",
+    "SUPERTREND_TSMOM_30_ETH_GT_MA50_SIZING",
+    "SUPERTREND_TSMOM_30_INDEX_GT_MA50_GATE",
+    "SUPERTREND_TSMOM_30_INDEX_GT_MA50_SIZING",
+    "SUPERTREND_TSMOM_30_SCORE_AVG_GT_1_GATE",
+    "SUPERTREND_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "VIDYA_TSMOM_30_ETH_GT_MA50_GATE",
+    "VIDYA_TSMOM_30_ETH_GT_MA50_SIZING",
+    "VIDYA_TSMOM_30_SCORE_AVG_GT_1_SIZING",
+    "VMA_TSMOM_30_ETH_GT_MA50_GATE",
+    "VMA_TSMOM_30_ETH_GT_MA50_SIZING",
+    "VMA_TSMOM_30_SCORE_AVG_GT_1_GATE",
+    "VMA_TSMOM_30_SCORE_AVG_GT_1_SIZING"
+  ],
+  "criteria": {
+    "sensitivity": {
+      "skipped": false,
+      "passed_count": 18,
+      "failed_count": 0
+    },
+    "window_stress": {
+      "skipped": false,
+      "passed_count": 18,
+      "failed_count": 0
+    },
+    "data_quality": {
+      "skipped": false,
+      "passed_count": 18,
+      "warned_count": 0,
+      "failed_count": 0
+    }
+  },
+  "warnings": {
+    "data_quality": []
+  },
+  "failures": {
+    "sensitivity": [],
+    "window_stress": [],
+    "data_quality": []
+  }
+}

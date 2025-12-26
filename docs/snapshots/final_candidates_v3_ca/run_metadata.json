@@ -1,0 +1,20 @@
+{
+  "git_commit": "ed404ce3dd5949ff36018cf8a75e97ce31d08c72",
+  "timestamp_utc": "2025-12-26T17:11:09.217887+00:00",
+  "command": "scripts\\finalize_candidates_pack.py --stage2-dir docs\\snapshots\\stage2_full_v3_ca --out-dir docs\\final --snapshot-dir docs\\snapshots\\final_candidates_v3_ca --version v3_ca",
+  "source_files": {
+    "strict_pass": "docs\\snapshots\\stage2_full_v3_ca\\stage2_final_pass.csv",
+    "pass_with_warn": "docs\\snapshots\\stage2_full_v3_ca\\stage2_final_pass_with_warn.csv"
+  },
+  "output_files": {
+    "final_candidates": "docs\\final\\final_candidates_v3_ca.csv",
+    "research_candidates": "docs\\final\\research_candidates_v3_ca.csv",
+    "readme": "docs\\final\\FINAL_CANDIDATES_v3_ca.md"
+  },
+  "counts": {
+    "strict_pass": 18,
+    "research_total": 18,
+    "research_pass": 18,
+    "research_warn": 0
+  }
+}
