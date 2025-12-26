@@ -59,6 +59,217 @@ class BacktestResult:
     start_date: str
     end_date: str
     days: int
+    valid: bool = True  # False if any invariant violated
+    violations: str = ""  # Comma-separated violation codes
+
+
+def validate_metrics_invariants(
+    cum_ret: pd.Series | np.ndarray | list | None,
+    metrics: dict,
+    market_type: str,
+    strategy_id: str,
+    market: str,
+    symbol: str = ""
+) -> tuple[bool, list[str]]:
+    """
+    Validate metrics invariants for a single symbol.
+
+    Returns:
+        (is_valid, list_of_violations)
+
+    Invariants (checked in order):
+    0) cum_ret must exist and be non-empty
+    a) Equity must not contain NaN/inf
+    b) Equity must be non-negative (all markets - Option A: strict policy)
+    c) MDD must be in [-1, 0]
+    d) CAGR consistency: if final_equity ≈ 0 (within EPS), cagr must be -1.0
+
+    EPS Constants:
+    - EPS_EQUITY (1e-12): Tolerance for float noise in equity checks
+    - EPS_CAGR (1e-6): Tolerance for CAGR value comparison
+    """
+    EPS_EQUITY = 1e-12  # Tolerance for float noise in equity negativity/zero check
+    EPS_CAGR = 1e-6     # Tolerance for CAGR value comparison
+
+    violations = []
+    is_valid = True
+    location = f"{market}:{strategy_id}:{symbol}" if symbol else f"{market}:{strategy_id}"
+
+    # (0) Type normalization and missing check
+    if cum_ret is None:
+        violations.append("cum_ret_missing:None")
+        is_valid = False
+        for v in violations:
+            print(f"WARNING: [{location}] INVARIANT_VIOLATION: {v}")
+        return is_valid, violations
+
+    # Normalize to pd.Series with float64 dtype
+    try:
+        cum_ret = pd.Series(cum_ret, dtype="float64")
+    except (ValueError, TypeError) as e:
+        violations.append(f"cum_ret_invalid_type:{type(cum_ret).__name__}")
+        is_valid = False
+        for v in violations:
+            print(f"WARNING: [{location}] INVARIANT_VIOLATION: {v}")
+        return is_valid, violations
+
+    if len(cum_ret) == 0:
+        violations.append("cum_ret_missing:empty")
+        is_valid = False
+        for v in violations:
+            print(f"WARNING: [{location}] INVARIANT_VIOLATION: {v}")
+        return is_valid, violations
+
+    # (a) NaN/inf check FIRST (before numeric comparisons)
+    if cum_ret.isna().any():
+        nan_count = int(cum_ret.isna().sum())
+        violations.append(f"equity_has_nan:{nan_count}")
+        is_valid = False
+    if np.isinf(cum_ret).any():
+        inf_count = int(np.isinf(cum_ret).sum())
+        violations.append(f"equity_has_inf:{inf_count}")
+        is_valid = False
+
+    # (b) Equity >= 0 with EPS tolerance (applies to ALL markets - strict policy)
+    if (cum_ret < -EPS_EQUITY).any():
+        min_val = float(cum_ret.min())
+        violations.append(f"equity_negative:{min_val:.6f}")
+        is_valid = False
+
+    # (c) MDD in [-1, 0]
+    mdd = metrics.get("mdd", 0)
+    if mdd < -1.0:
+        violations.append(f"mdd_below_minus1:{mdd:.6f}")
+        is_valid = False
+    if mdd > 0:
+        violations.append(f"mdd_positive:{mdd:.6f}")
+        is_valid = False
+
+    # (d) CAGR consistency: if final_equity ≈ 0 (within EPS_EQUITY), cagr must ≈ -1.0
+    # Uses same EPS_EQUITY threshold for consistency with equity checks
+    final_val = cum_ret.iloc[-1]
+    cagr = metrics.get("cagr", 0)
+    is_total_loss = abs(final_val) <= EPS_EQUITY  # Treat as 0 if within EPS
+    if is_total_loss and abs(cagr - (-1.0)) > EPS_CAGR:
+        violations.append(f"cagr_consistency:final={final_val:.6f},cagr={cagr:.6f}")
+        is_valid = False
+
+    # Print warnings
+    for v in violations:
+        print(f"WARNING: [{location}] INVARIANT_VIOLATION: {v}")
+
+    return is_valid, violations
+
+
+def save_invariant_violations(
+    violations: list[dict],
+    output_dir: Path
+) -> None:
+    """Append violations to outputs/<out>/invariant_violations.csv"""
+    if not violations:
+        return
+    filepath = output_dir / "invariant_violations.csv"
+    df = pd.DataFrame(violations)
+    if filepath.exists():
+        df.to_csv(filepath, mode='a', header=False, index=False)
+    else:
+        df.to_csv(filepath, index=False)
+
+
+def parse_debug_dump(arg: str) -> tuple[str, str] | None:
+    """Parse 'market=X,strategy_id=Y' format."""
+    if not arg:
+        return None
+    try:
+        parts = dict(p.split("=") for p in arg.split(",") if "=" in p)
+        market = parts.get("market", "")
+        strategy_id = parts.get("strategy_id", "")
+        if market and strategy_id:
+            return (market, strategy_id)
+    except ValueError:
+        pass
+    return None
+
+
+def save_debug_dump(
+    df: pd.DataFrame,
+    market: str,
+    strategy_id: str,
+    output_dir: Path,
+    regime_series: pd.Series | None = None
+) -> str:
+    """
+    Save detailed debug equity dump.
+
+    Output: outputs/<out>/debug/{market}_{strategy_id}_equity.csv
+
+    Columns:
+    - date, close, position
+    - strat_ret, cum_ret (equity)
+    - costs, pos_change
+    - regime_state (if available)
+    - entry_flag, exit_flag
+    """
+    debug_dir = output_dir / "debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    # Entry/exit flags
+    pos = df["position"]
+    entry_flag = ((pos > 0) & (pos.shift(1).fillna(0) == 0)).astype(int)
+    exit_flag = ((pos == 0) & (pos.shift(1).fillna(0) > 0)).astype(int)
+
+    debug_df = pd.DataFrame({
+        "date": df["date"],
+        "close": df["close"],
+        "position": df["position"],
+        "strat_ret": df["strat_ret"],
+        "equity": df["cum_ret"],
+        "costs": df["costs"],
+        "pos_change": df["pos_change"],
+        "entry_flag": entry_flag,
+        "exit_flag": exit_flag,
+    })
+
+    if regime_series is not None:
+        # Normalize date types and merge regime_state
+        try:
+            # Convert to datetime and normalize to date-only (strip time/tz)
+            debug_dates = pd.to_datetime(debug_df["date"])
+            # Remove timezone if present, then normalize to midnight
+            if debug_dates.dt.tz is not None:
+                debug_dates = debug_dates.dt.tz_localize(None)
+            debug_df["date"] = debug_dates.dt.normalize()
+
+            # Create regime DataFrame with normalized datetime index
+            regime_dates = pd.to_datetime(regime_series.index)
+            if regime_dates.tz is not None:
+                regime_dates = regime_dates.tz_localize(None)
+            regime_df = pd.DataFrame({
+                "date": regime_dates.normalize(),
+                "regime_state": regime_series.values
+            })
+
+            # Deduplicate dates (take last value if duplicates exist)
+            regime_df = regime_df.groupby("date", as_index=False).last()
+
+            # Merge on date (left join to preserve all debug_df rows)
+            debug_df = debug_df.merge(regime_df, on="date", how="left")
+
+            # Preserve dtype: only convert to int if original dtype is integer-like
+            original_dtype = regime_series.dtype
+            if pd.api.types.is_integer_dtype(original_dtype):
+                debug_df["regime_state"] = debug_df["regime_state"].fillna(0).astype(int)
+            else:
+                debug_df["regime_state"] = debug_df["regime_state"].fillna(0.0)
+        except Exception:
+            debug_df["regime_state"] = 0
+    else:
+        debug_df["regime_state"] = 0
+
+    filepath = debug_dir / f"{market}_{strategy_id}_equity.csv"
+    debug_df.to_csv(filepath, index=False, float_format="%.8g")
+    print(f"[DEBUG DUMP] Saved: {filepath}")
+    return str(filepath)
 
 
 def load_config(config_path: Path) -> dict:
@@ -107,7 +318,10 @@ def compute_strategy_signals(
     regime_strength: pd.Series | None,
     trend_params: dict,
     momentum_params: dict,
-    vol_target_base: float
+    vol_target_base: float,
+    max_leverage: float = 1.0,
+    allow_shorting: bool = False,
+    allow_borrowing: bool = False
 ) -> pd.DataFrame:
     """
     Compute entry/exit signals for a strategy.
@@ -180,6 +394,16 @@ def compute_strategy_signals(
         # Scale position by regime strength (0 to vol_target_base)
         position = position * df_with_regime["strength"].values.clip(0, 1)
 
+    # Apply leverage constraints BEFORE returns are computed
+    if not allow_shorting:
+        position = np.clip(position, 0, max_leverage)
+    else:
+        position = np.clip(position, -max_leverage, max_leverage)
+
+    # For spot: ensure no borrowing (position cannot exceed 1.0)
+    if not allow_borrowing:
+        position = np.minimum(position, 1.0)
+
     result = pd.DataFrame({
         "date": df["date"],
         "close": df["close"],
@@ -204,7 +428,9 @@ def backtest_symbol(
     df = signals.copy()
 
     # Daily returns
+    # Handle edge cases: NaN (first bar), inf (0->positive), -inf (negative price)
     df["ret"] = df["close"].pct_change().fillna(0)
+    df["ret"] = df["ret"].replace([np.inf, -np.inf], 0)
 
     # Position change for cost calculation
     df["pos_change"] = df["position"].diff().abs().fillna(0)
@@ -214,10 +440,14 @@ def backtest_symbol(
     df["costs"] = df["pos_change"] * cost_per_trade
 
     # Strategy returns
+    # Clip strat_ret to -1.0 to prevent (1+strat_ret) < 0
+    # This handles edge cases where ret=-1 (close->0) plus costs would cause negative equity
     df["strat_ret"] = df["position"].shift(1).fillna(0) * df["ret"] - df["costs"]
+    df["strat_ret"] = df["strat_ret"].clip(lower=-1.0)
 
-    # Cumulative returns
+    # Cumulative returns (clip to 0 as safety net - should not be needed after strat_ret clip)
     df["cum_ret"] = (1 + df["strat_ret"]).cumprod()
+    df["cum_ret"] = df["cum_ret"].clip(lower=0.0)
 
     # Performance metrics
     total_days = len(df)
@@ -234,17 +464,26 @@ def backtest_symbol(
     # CAGR
     years = total_days / 252
     final_value = df["cum_ret"].iloc[-1]
-    cagr = (final_value ** (1 / years) - 1) if years > 0 and final_value > 0 else 0
+    if years > 0 and final_value > 0:
+        cagr = final_value ** (1 / years) - 1
+    elif years > 0 and final_value == 0:
+        cagr = -1.0  # Total loss
+    else:
+        cagr = 0.0
+    # Note: negative final_value in spot is INVALID, handled by invariant check
 
     # Sharpe (daily, annualized)
     mean_ret = df["strat_ret"].mean()
     std_ret = df["strat_ret"].std()
     sharpe = (mean_ret / std_ret * np.sqrt(252)) if std_ret > 0 else 0
 
-    # Max Drawdown
+    # Max Drawdown - use eps to prevent division by zero
+    EPS = 1e-10
     running_max = df["cum_ret"].cummax()
-    drawdown = (df["cum_ret"] - running_max) / running_max
-    mdd = drawdown.min()
+    safe_max = np.maximum(running_max.values, EPS)
+    drawdown = df["cum_ret"].values / safe_max - 1.0
+    mdd = float(drawdown.min())
+    # DO NOT CLAMP - check invariant later and mark invalid if violated
 
     # Win Rate
     trading_days = df[df["position"].shift(1) > 0]
@@ -256,8 +495,13 @@ def backtest_symbol(
     # Turnover (average position changes per year)
     turnover = df["pos_change"].sum() / years if years > 0 else 0
 
-    # Trade count (position going from 0 to >0)
-    trades = ((df["position"] > 0) & (df["position"].shift(1) == 0)).sum()
+    # Trade count: 0→non-zero entries + sign flips (long↔short)
+    # Entry = (prev==0 & pos!=0) OR (prev*pos < 0, i.e., sign flip)
+    pos = df["position"]
+    prev_pos = pos.shift(1).fillna(0)
+    new_entry = (prev_pos == 0) & (pos != 0)
+    sign_flip = (prev_pos * pos) < 0  # Different signs = flip
+    trades = (new_entry | sign_flip).sum()
 
     return {
         "cagr": cagr,
@@ -266,6 +510,8 @@ def backtest_symbol(
         "win_rate": win_rate,
         "turnover": turnover,
         "trades": int(trades),
+        "_cum_ret": df["cum_ret"],  # For invariant validation
+        "_signals_df": df,  # For debug dump
     }
 
 
@@ -316,7 +562,10 @@ def run_strategy_backtest(
     vol_target_base: float,
     fee_bps: float,
     slippage_bps: float,
-    date_range: tuple[str, str] | None = None
+    date_range: tuple[str, str] | None = None,
+    market_config: dict | None = None,
+    debug_dump_target: tuple[str, str] | None = None,
+    output_dir: Path | None = None
 ) -> BacktestResult | None:
     """
     Run backtest for a single strategy on a market.
@@ -331,7 +580,23 @@ def run_strategy_backtest(
     regime_series = regime_calc.get_regime(regime_name, market)
     regime_strength = regime_calc.get_regime_strength(regime_name, market) if regime_mode == "SIZING" else None
 
-    symbol_results = []
+    # Get leverage constraints from market config
+    if market_config:
+        max_leverage = market_config.get("max_gross_leverage", 1.0)
+        allow_shorting = market_config.get("allow_shorting", False)
+        allow_borrowing = market_config.get("allow_borrowing", False)
+        market_type = market_config.get("market_type", "spot")
+    else:
+        max_leverage = 1.0
+        allow_shorting = False
+        allow_borrowing = False
+        market_type = "spot"
+
+    strategy_id = f"{trend}_{momentum}_{regime_name}_{regime_mode}"
+
+    # Use list of (symbol, result) tuples to guarantee matching
+    # This prevents mismatch if continue/skip occurs in the loop
+    symbol_result_pairs: list[tuple[str, dict]] = []
     all_dates = []
 
     for symbol in symbols:
@@ -346,22 +611,39 @@ def run_strategy_backtest(
             if len(df) < 30:
                 continue
 
-        # Compute signals
+        # Compute signals with leverage constraints
         try:
             signals = compute_strategy_signals(
                 df, trend, momentum, regime_series, regime_mode,
-                regime_strength, trend_params, momentum_params, vol_target_base
+                regime_strength, trend_params, momentum_params, vol_target_base,
+                max_leverage=max_leverage,
+                allow_shorting=allow_shorting,
+                allow_borrowing=allow_borrowing
             )
         except Exception:
             continue
 
         # Run backtest
         result = backtest_symbol(signals, fee_bps, slippage_bps)
-        symbol_results.append(result)
+        # Append as tuple - symbol and result are always paired together
+        symbol_result_pairs.append((symbol, result))
         all_dates.extend(df["date"].tolist())
 
-    if not symbol_results:
+        # Debug dump if this is the target
+        if debug_dump_target and output_dir:
+            target_market, target_strategy = debug_dump_target
+            if market == target_market and strategy_id == target_strategy:
+                if "_signals_df" in result:
+                    save_debug_dump(
+                        result["_signals_df"], market, strategy_id,
+                        output_dir, regime_series
+                    )
+
+    if not symbol_result_pairs:
         return None
+
+    # Extract results for aggregation
+    symbol_results = [result for _, result in symbol_result_pairs]
 
     # Aggregate across symbols
     agg = aggregate_symbol_results(symbol_results)
@@ -375,7 +657,25 @@ def run_strategy_backtest(
         start_date = end_date = ""
         days = 0
 
-    strategy_id = f"{trend}_{momentum}_{regime_name}_{regime_mode}"
+    # Validate invariants PER-SYMBOL (strategy is invalid if ANY symbol violates)
+    # Tuple approach guarantees symbol-result matching
+    is_valid = True
+    violations_list = []
+
+    for symbol, result in symbol_result_pairs:
+        if "_cum_ret" in result:
+            cum_ret = result["_cum_ret"]
+            symbol_metrics = {
+                "cagr": result.get("cagr", 0),
+                "mdd": result.get("mdd", 0),
+            }
+            sym_valid, sym_violations = validate_metrics_invariants(
+                cum_ret, symbol_metrics, market_type, strategy_id, market, symbol
+            )
+            if not sym_valid:
+                is_valid = False
+                # Prefix violations with symbol name for clarity
+                violations_list.extend([f"{symbol}:{v}" for v in sym_violations])
 
     return BacktestResult(
         market=market,
@@ -393,6 +693,8 @@ def run_strategy_backtest(
         start_date=start_date,
         end_date=end_date,
         days=days,
+        valid=is_valid,
+        violations=",".join(sorted(violations_list)),  # Sort for determinism
     )
 
 
@@ -459,6 +761,8 @@ def results_to_dataframe(results: list[BacktestResult]) -> pd.DataFrame:
             "start_date": r.start_date,
             "end_date": r.end_date,
             "days": r.days,
+            "valid": r.valid,
+            "violations": r.violations,
         })
 
     return pd.DataFrame(data)
@@ -511,12 +815,31 @@ def run_strategy_backtest_preloaded(
     vol_target_base: float,
     fee_bps: float,
     slippage_bps: float,
-    date_range: tuple[str, str] | None = None
+    date_range: tuple[str, str] | None = None,
+    market_config: dict | None = None,
+    debug_dump_target: tuple[str, str] | None = None,
+    output_dir: Path | None = None
 ) -> BacktestResult | None:
     """
     Run backtest using preloaded data (faster than loading from disk each time).
     """
-    symbol_results = []
+    # Get leverage constraints from market config
+    if market_config:
+        max_leverage = market_config.get("max_gross_leverage", 1.0)
+        allow_shorting = market_config.get("allow_shorting", False)
+        allow_borrowing = market_config.get("allow_borrowing", False)
+        market_type = market_config.get("market_type", "spot")
+    else:
+        max_leverage = 1.0
+        allow_shorting = False
+        allow_borrowing = False
+        market_type = "spot"
+
+    strategy_id = f"{trend}_{momentum}_{regime_name}_{regime_mode}"
+
+    # Use list of (symbol, result) tuples to guarantee matching
+    # This prevents mismatch if continue/skip occurs in the loop
+    symbol_result_pairs: list[tuple[str, dict]] = []
     all_dates = []
 
     for symbol, df in market_data.items():
@@ -527,22 +850,39 @@ def run_strategy_backtest_preloaded(
             if len(df) < 30:
                 continue
 
-        # Compute signals
+        # Compute signals with leverage constraints
         try:
             signals = compute_strategy_signals(
                 df, trend, momentum, regime_series, regime_mode,
-                regime_strength, trend_params, momentum_params, vol_target_base
+                regime_strength, trend_params, momentum_params, vol_target_base,
+                max_leverage=max_leverage,
+                allow_shorting=allow_shorting,
+                allow_borrowing=allow_borrowing
             )
         except Exception:
             continue
 
         # Run backtest
         result = backtest_symbol(signals, fee_bps, slippage_bps)
-        symbol_results.append(result)
+        # Append as tuple - symbol and result are always paired together
+        symbol_result_pairs.append((symbol, result))
         all_dates.extend(df["date"].tolist())
 
-    if not symbol_results:
+        # Debug dump if this is the target
+        if debug_dump_target and output_dir:
+            target_market, target_strategy = debug_dump_target
+            if market == target_market and strategy_id == target_strategy:
+                if "_signals_df" in result:
+                    save_debug_dump(
+                        result["_signals_df"], market, strategy_id,
+                        output_dir, regime_series
+                    )
+
+    if not symbol_result_pairs:
         return None
+
+    # Extract results for aggregation
+    symbol_results = [result for _, result in symbol_result_pairs]
 
     # Aggregate across symbols
     agg = aggregate_symbol_results(symbol_results)
@@ -556,7 +896,24 @@ def run_strategy_backtest_preloaded(
         start_date = end_date = ""
         days = 0
 
-    strategy_id = f"{trend}_{momentum}_{regime_name}_{regime_mode}"
+    # Validate invariants PER-SYMBOL (strategy is invalid if ANY symbol violates)
+    # Tuple approach guarantees symbol-result matching
+    is_valid = True
+    violations_list = []
+
+    for symbol, result in symbol_result_pairs:
+        if "_cum_ret" in result:
+            cum_ret = result["_cum_ret"]
+            symbol_metrics = {
+                "cagr": result.get("cagr", 0),
+                "mdd": result.get("mdd", 0),
+            }
+            sym_valid, sym_violations = validate_metrics_invariants(
+                cum_ret, symbol_metrics, market_type, strategy_id, market, symbol
+            )
+            if not sym_valid:
+                is_valid = False
+                violations_list.extend([f"{symbol}:{v}" for v in sym_violations])
 
     return BacktestResult(
         market=market,
@@ -574,6 +931,8 @@ def run_strategy_backtest_preloaded(
         start_date=start_date,
         end_date=end_date,
         days=days,
+        valid=is_valid,
+        violations=",".join(sorted(violations_list)),  # Sort for determinism
     )
 
 
@@ -591,7 +950,14 @@ def main() -> int:
                         default="both")
     parser.add_argument("--sample-size", type=int, default=None,
                         help="Limit symbols per market for quick testing")
+    parser.add_argument("--debug-dump", type=str, default=None,
+                        help="Debug dump: 'market=X,strategy_id=Y' to save equity curve")
+    parser.add_argument("--fail-on-invariant", action="store_true",
+                        help="Exit non-zero if any invariant is violated (for CI)")
     args = parser.parse_args()
+
+    # Parse debug dump target
+    debug_dump_target = parse_debug_dump(args.debug_dump)
 
     print("[PURPOSE] Execute Stage1 grid backtest across 4 markets for strategy comparison.")
     print("-" * 70)
@@ -656,12 +1022,16 @@ def main() -> int:
         slippage_bps = market_cfg.get("slippage_bps_roundtrip", 2)
 
         # Preload all data for this market (major speedup)
-        print(f"\n[{market}] Loading data...")
+        print(f"\n[{market}] Loading data...", flush=True)
         market_data = preload_market_data(args.normalized_dir, market, args.sample_size)
-        print(f"[{market}] Loaded {len(market_data)} symbols. Processing {len(combinations)} strategies...")
+        print(f"[{market}] Loaded {len(market_data)} symbols. Processing {len(combinations)} strategies...", flush=True)
 
-        for trend, momentum, regime, regime_mode in combinations:
+        for idx, (trend, momentum, regime, regime_mode) in enumerate(combinations, 1):
             combo_count += 1
+
+            # Progress output every 10 combinations
+            if idx % 10 == 0 or idx == len(combinations):
+                print(f"  [{market}] {idx}/{len(combinations)} strategies...", flush=True)
 
             # Get regime series for this combination
             regime_series = regime_calc.get_regime(regime, market)
@@ -673,7 +1043,10 @@ def main() -> int:
                     market, market_data, regime_series, regime_strength,
                     trend, momentum, regime, regime_mode,
                     trend_params, momentum_params, vol_target_base,
-                    fee_bps, slippage_bps
+                    fee_bps, slippage_bps,
+                    market_config=market_cfg,
+                    debug_dump_target=debug_dump_target,
+                    output_dir=args.out
                 )
                 if result:
                     all_results.append(result)
@@ -685,7 +1058,10 @@ def main() -> int:
                     trend, momentum, regime, regime_mode,
                     trend_params, momentum_params, vol_target_base,
                     fee_bps, slippage_bps,
-                    date_range=intersection_dates
+                    date_range=intersection_dates,
+                    market_config=market_cfg,
+                    debug_dump_target=debug_dump_target,
+                    output_dir=args.out
                 )
                 if result:
                     intersection_results.append(result)
@@ -697,35 +1073,74 @@ def main() -> int:
     print("[STATUS] Saving results...")
 
     # Full results summary
+    invariant_violation_count = 0
+
     if all_results:
         df_summary = results_to_dataframe(all_results)
-        df_summary.to_csv(args.out / "stage1_summary.csv", index=False)
+        # Sort for determinism: market, strategy_id
+        df_summary = df_summary.sort_values(["market", "strategy_id"]).reset_index(drop=True)
+        df_summary.to_csv(args.out / "stage1_summary.csv", index=False, float_format="%.8g")
         print(f"  -> stage1_summary.csv ({len(df_summary)} rows)")
 
-        # Top 20 per market
+        # Count and save invariant violations
+        invalid_results = [r for r in all_results if not r.valid]
+        invariant_violation_count = len(invalid_results)
+        if invalid_results:
+            violations_data = [
+                {"market": r.market, "strategy_id": r.strategy_id, "violations": r.violations}
+                for r in invalid_results
+            ]
+            save_invariant_violations(violations_data, args.out)
+            print(f"  -> invariant_violations.csv ({len(violations_data)} violations)")
+
+        # Top 20 per market (ONLY valid results)
         top20_list = []
         for market in enabled_markets:
             market_df = df_summary[df_summary["market"] == market]
-            top20 = market_df.nlargest(20, "sharpe")
+            # Filter to only valid results
+            valid_market_df = market_df[market_df["valid"] == True]
+            # Sort by sharpe desc, then strategy_id asc for tie-breaking determinism
+            # na_position="last" ensures NaN sharpe goes to bottom (excluded from top20)
+            sorted_df = valid_market_df.sort_values(
+                ["sharpe", "strategy_id"], ascending=[False, True], na_position="last"
+            )
+            top20 = sorted_df.head(20)
             top20_list.append(top20)
 
         if top20_list:
             df_top20 = pd.concat(top20_list, ignore_index=True)
-            df_top20.to_csv(args.out / "stage1_top20.csv", index=False)
-            print(f"  -> stage1_top20.csv ({len(df_top20)} rows)")
+            # Final sort after concat for fully deterministic row order
+            df_top20 = df_top20.sort_values(
+                ["market", "sharpe", "strategy_id"],
+                ascending=[True, False, True],
+                na_position="last"
+            ).reset_index(drop=True)
+            df_top20.to_csv(args.out / "stage1_top20.csv", index=False, float_format="%.8g")
+            print(f"  -> stage1_top20.csv ({len(df_top20)} rows, valid only)")
 
     # Intersection results
     if intersection_results:
         df_intersection = results_to_dataframe(intersection_results)
-        df_intersection.to_csv(args.out / "stage1_intersection_summary.csv", index=False)
+        # Sort for determinism
+        df_intersection = df_intersection.sort_values(["market", "strategy_id"]).reset_index(drop=True)
+        df_intersection.to_csv(args.out / "stage1_intersection_summary.csv", index=False, float_format="%.8g")
         print(f"  -> stage1_intersection_summary.csv ({len(df_intersection)} rows)")
+
+    # Count valid/invalid
+    valid_count = sum(1 for r in all_results if r.valid)
+    invalid_count = sum(1 for r in all_results if not r.valid)
 
     print("\n" + "=" * 70)
     print("[DONE] Stage1 backtest completed.")
     print(f"  Total strategies tested: {combo_count}")
-    print(f"  Full period results: {len(all_results)}")
+    print(f"  Full period results: {len(all_results)} (valid: {valid_count}, invalid: {invalid_count})")
     print(f"  Intersection results: {len(intersection_results)}")
     print("=" * 70)
+
+    # Exit non-zero if --fail-on-invariant and violations found
+    if args.fail_on_invariant and invariant_violation_count > 0:
+        print(f"\n[ERROR] --fail-on-invariant: {invariant_violation_count} invariant violations found.")
+        return 1
 
     return 0
 

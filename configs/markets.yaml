@@ -13,6 +13,9 @@ markets:
     market_type: "spot"
     fee_bps_roundtrip: 10
     slippage_bps_roundtrip: 2
+    max_gross_leverage: 1.0
+    allow_borrowing: false
+    allow_shorting: false
 
   bithumb_krw:
     enabled: true
@@ -24,6 +27,9 @@ markets:
     market_type: "spot"
     fee_bps_roundtrip: 10
     slippage_bps_roundtrip: 2
+    max_gross_leverage: 1.0
+    allow_borrowing: false
+    allow_shorting: false
 
   binance_spot:
     enabled: true
@@ -35,6 +41,9 @@ markets:
     market_type: "spot"
     fee_bps_roundtrip: 10
     slippage_bps_roundtrip: 2
+    max_gross_leverage: 1.0
+    allow_borrowing: false
+    allow_shorting: false
 
   binance_futures:
     enabled: true
@@ -47,6 +56,9 @@ markets:
     fee_bps_roundtrip: 8
     slippage_bps_roundtrip: 3
     funding_included: false
+    max_gross_leverage: 2.0
+    allow_borrowing: true
+    allow_shorting: true
 
 # Common schema for normalized data
 normalized_schema:

@@ -137,7 +137,8 @@ echo [1/7] Phase 2 core...
 "%PY%" -m pytest -q ^
   tests/test_phase2_cost_models_handcalc.py ^
   tests/test_phase2_integration_smoke.py ^
-  tests/test_phase2_sensitivity_smoke.py
+  tests/test_phase2_sensitivity_smoke.py ^
+  tests/test_metrics_invariants.py
 exit /b %ERRORLEVEL%
 
 :CHUNK_P22
