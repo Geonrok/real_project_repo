@@ -66,6 +66,12 @@ def main() -> int:
         default=Path("docs/snapshots/final_candidates_v1"),
         help="Snapshot directory for metadata",
     )
+    parser.add_argument(
+        "--version",
+        type=str,
+        default="v1",
+        help="Version suffix for output files (e.g., v1, v2_ca)",
+    )
     args = parser.parse_args()
 
     # Validate inputs
@@ -96,8 +102,9 @@ def main() -> int:
     pass_warn_df = pass_warn_df.sort_values("strategy_id").reset_index(drop=True)
 
     # Write final CSVs
-    final_strict = out_dir / "final_candidates_v1.csv"
-    final_research = out_dir / "research_candidates_v1.csv"
+    version = args.version
+    final_strict = out_dir / f"final_candidates_{version}.csv"
+    final_research = out_dir / f"research_candidates_{version}.csv"
 
     strict_df.to_csv(final_strict, index=False)
     pass_warn_df.to_csv(final_research, index=False)
@@ -111,7 +118,7 @@ def main() -> int:
     print(f"[INFO] Research breakdown: {n_pass} PASS + {n_warn} WARN = {len(pass_warn_df)}")
 
     # Write FINAL_CANDIDATES.md
-    final_md = out_dir / "FINAL_CANDIDATES.md"
+    final_md = out_dir / f"FINAL_CANDIDATES_{version}.md"
     with open(final_md, "w", encoding="utf-8") as f:
         f.write("# Final Candidates\n\n")
         f.write("## Strict Pass (Live-Eligible)\n\n")
