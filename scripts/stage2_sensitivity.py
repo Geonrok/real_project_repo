@@ -85,7 +85,7 @@ def run_sensitivity_analysis(
     """Run sensitivity analysis on robust candidates."""
 
     # Load data
-    print(f"[INFO] Loading candidates from: {stage1_dir / candidates_csv}")
+    print(f"[INFO] Loading candidates from: {stage1_dir / candidates_csv}", flush=True)
     candidates_df = load_robust_candidates(stage1_dir, candidates_csv)
     summary_df = load_stage1_summary(stage1_dir)
     markets_config = load_markets_config(markets_config_path)
@@ -97,14 +97,14 @@ def run_sensitivity_analysis(
     vol_target_base = grid_config.get("vol_target_base", 0.2)
 
     strategy_ids = candidates_df["strategy_id"].tolist()
-    print(f"[INFO] Found {len(strategy_ids)} robust candidates")
+    print(f"[INFO] Found {len(strategy_ids)} robust candidates", flush=True)
 
     # Get enabled markets
     markets = [
         m for m, cfg in markets_config.get("markets", {}).items()
         if cfg.get("enabled", True)
     ]
-    print(f"[INFO] Markets: {markets}")
+    print(f"[INFO] Markets: {markets}", flush=True)
 
     results = []
     total_combos = len(strategy_ids) * len(markets) * len(fee_mults)
@@ -115,10 +115,10 @@ def run_sensitivity_analysis(
         base_fee = market_cfg.get("fee_bps_roundtrip", 10)
         base_slippage = market_cfg.get("slippage_bps_roundtrip", 2)
 
-        print(f"\n[{market}] Loading data...")
+        print(f"\n[{market}] Loading data...", flush=True)
         market_data = preload_market_data(normalized_dir, market)
         if not market_data:
-            print(f"  [WARN] No data for {market}, skipping")
+            print(f"  [WARN] No data for {market}, skipping", flush=True)
             continue
 
         # Initialize regime calculator
@@ -181,8 +181,8 @@ def run_sensitivity_analysis(
                     })
 
                 completed += 1
-                if completed % 50 == 0:
-                    print(f"  Progress: {completed}/{total_combos}")
+                if completed % 10 == 0:
+                    print(f"  Progress: {completed}/{total_combos}", flush=True)
 
     # Create DataFrame and sort deterministically
     df = pd.DataFrame(results)
@@ -214,12 +214,12 @@ def main() -> int:
 
     fee_mults = [float(x) for x in args.fee_mults.split(",")]
 
-    print("[PURPOSE] Stage2 Cost Sensitivity Analysis")
-    print("-" * 70)
-    print(f"  Stage1 dir: {args.stage1_dir}")
-    print(f"  Output dir: {args.out}")
-    print(f"  Fee multipliers: {fee_mults}")
-    print("-" * 70)
+    print("[PURPOSE] Stage2 Cost Sensitivity Analysis", flush=True)
+    print("-" * 70, flush=True)
+    print(f"  Stage1 dir: {args.stage1_dir}", flush=True)
+    print(f"  Output dir: {args.out}", flush=True)
+    print(f"  Fee multipliers: {fee_mults}", flush=True)
+    print("-" * 70, flush=True)
 
     # Create output directory
     args.out.mkdir(parents=True, exist_ok=True)
