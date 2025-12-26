@@ -35,6 +35,10 @@ import yaml
 # Suppress pandas warnings for cleaner output
 warnings.filterwarnings("ignore", category=pd.errors.SettingWithCopyWarning)
 
+# Global cache for corporate actions config
+_CORPORATE_ACTIONS_CACHE: dict | None = None
+_CORPORATE_ACTIONS_PATH = Path(__file__).parent.parent / "configs" / "corporate_actions.yaml"
+
 # Import local modules
 sys.path.insert(0, str(Path(__file__).parent))
 from indicators import compute_trend_indicator, compute_momentum_indicator
@@ -283,8 +287,136 @@ def load_config(config_path: Path) -> dict:
         return yaml.safe_load(f)
 
 
-def load_symbol_data(normalized_dir: Path, market: str, symbol: str) -> pd.DataFrame | None:
-    """Load normalized OHLCV data for a symbol."""
+def load_corporate_actions() -> list[dict]:
+    """
+    Load and cache corporate actions configuration.
+
+    Returns list of corporate action entries, each with:
+        market, symbol, date, action_type, ratio, note, source_refs
+    """
+    global _CORPORATE_ACTIONS_CACHE
+
+    if _CORPORATE_ACTIONS_CACHE is not None:
+        return _CORPORATE_ACTIONS_CACHE
+
+    if not _CORPORATE_ACTIONS_PATH.exists():
+        _CORPORATE_ACTIONS_CACHE = []
+        return _CORPORATE_ACTIONS_CACHE
+
+    try:
+        with open(_CORPORATE_ACTIONS_PATH, encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+        _CORPORATE_ACTIONS_CACHE = config.get("corporate_actions", [])
+    except Exception as e:
+        print(f"[WARN] Failed to load corporate_actions.yaml: {e}")
+        _CORPORATE_ACTIONS_CACHE = []
+
+    return _CORPORATE_ACTIONS_CACHE
+
+
+def apply_corporate_action_adjustments(
+    df: pd.DataFrame,
+    market: str,
+    symbol: str,
+) -> tuple[pd.DataFrame, int]:
+    """
+    Apply corporate action price adjustments to a DataFrame.
+
+    For redenomination/split actions, scales close prices BEFORE the action date
+    by (1/ratio) to convert old units to new units.
+
+    Args:
+        df: DataFrame with 'date' and 'close' columns
+        market: Market identifier
+        symbol: Symbol name
+
+    Returns:
+        (adjusted_df, adjustment_count) where adjustment_count is number of actions applied
+    """
+    actions = load_corporate_actions()
+    if not actions:
+        return df, 0
+
+    # Find matching actions for this market/symbol
+    matching = [
+        a for a in actions
+        if a.get("market") == market and a.get("symbol") == symbol
+    ]
+
+    if not matching:
+        return df, 0
+
+    df = df.copy()
+    adjustment_count = 0
+
+    for action in matching:
+        action_type = action.get("action_type", "")
+        ratio = action.get("ratio", 1)
+        action_date_str = action.get("date", "")
+
+        if not action_date_str or ratio <= 0:
+            continue
+
+        # Parse action date (handle string and various formats)
+        try:
+            action_date = pd.to_datetime(action_date_str)
+            # Normalize to remove time component
+            action_date = action_date.normalize()
+        except Exception:
+            print(f"[WARN] Invalid date in corporate action: {action_date_str}")
+            continue
+
+        # Normalize df dates for comparison (remove time/tz)
+        df_dates = df["date"]
+        if df_dates.dt.tz is not None:
+            df_dates = df_dates.dt.tz_localize(None)
+        df_dates_normalized = df_dates.dt.normalize()
+
+        # Create mask for dates strictly BEFORE action date
+        before_mask = df_dates_normalized < action_date
+
+        if not before_mask.any():
+            continue
+
+        # Apply adjustment based on action type
+        if action_type in ("redenomination", "split"):
+            # Scale down old prices: old_close / ratio = new_close
+            df.loc[before_mask, "close"] = df.loc[before_mask, "close"] / ratio
+            # Also adjust OHLC if present
+            for col in ["open", "high", "low"]:
+                if col in df.columns:
+                    df.loc[before_mask, col] = df.loc[before_mask, col] / ratio
+            adjustment_count += 1
+
+        elif action_type == "reverse_split":
+            # Scale up old prices: old_close * ratio = new_close
+            df.loc[before_mask, "close"] = df.loc[before_mask, "close"] * ratio
+            for col in ["open", "high", "low"]:
+                if col in df.columns:
+                    df.loc[before_mask, col] = df.loc[before_mask, col] * ratio
+            adjustment_count += 1
+
+    return df, adjustment_count
+
+
+def load_symbol_data(
+    normalized_dir: Path,
+    market: str,
+    symbol: str,
+    apply_corporate_actions: bool = True,
+) -> pd.DataFrame | None:
+    """
+    Load normalized OHLCV data for a symbol.
+
+    Args:
+        normalized_dir: Path to normalized data directory
+        market: Market identifier
+        symbol: Symbol name
+        apply_corporate_actions: If True, apply corporate action adjustments
+
+    Returns:
+        DataFrame with adjusted prices, or None if file not found
+    """
     market_dir = normalized_dir / market
     csv_path = market_dir / f"{symbol}.csv"
     parquet_path = market_dir / f"{symbol}.parquet"
@@ -298,6 +430,11 @@ def load_symbol_data(normalized_dir: Path, market: str, symbol: str) -> pd.DataF
 
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").reset_index(drop=True)
+
+    # Apply corporate action adjustments
+    if apply_corporate_actions:
+        df, _ = apply_corporate_action_adjustments(df, market, symbol)
+
     return df
 
 

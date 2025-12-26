@@ -1,0 +1,34 @@
+# Corporate Actions Registry
+#
+# Purpose: Record token redenominations, splits, and other corporate actions
+# that cause apparent extreme price changes in historical data.
+#
+# Usage: The backtest loader applies price adjustments to historical data
+# so that returns are computed on a consistent unit basis.
+#
+# Schema:
+#   market: Market identifier (e.g., binance_spot, binance_futures)
+#   symbol: Symbol name as it appears in normalized data
+#   date: Effective date of the action (YYYY-MM-DD)
+#   action_type: Type of action (redenomination, split, reverse_split)
+#   ratio: Conversion ratio (e.g., 1000 means 1 old = 1000 new)
+#   note: Human-readable description
+#   source_refs: List of reference sources (announcements, support articles)
+#
+# Adjustment Logic:
+#   For action_type in [redenomination, split]:
+#     - Dates BEFORE action_date: close = close / ratio
+#     - This converts old units to new units for consistent returns
+#   For action_type in [reverse_split]:
+#     - Dates BEFORE action_date: close = close * ratio
+
+corporate_actions:
+  - market: binance_spot
+    symbol: QUICK
+    date: "2023-07-21"
+    action_type: redenomination
+    ratio: 1000
+    note: "Binance QUICK token swap/redenomination 1 OLD = 1000 NEW (QuickSwap migration)"
+    source_refs:
+      - "binance_announcement_2023-07-21"
+      - "binance_support_2023-07-10"
