@@ -423,12 +423,28 @@ def compute_strategy_signals(
 def backtest_symbol(
     signals: pd.DataFrame,
     fee_bps: float,
-    slippage_bps: float
+    slippage_bps: float,
+    return_diag: bool = False
 ) -> dict:
     """
     Run backtest on signal DataFrame.
 
+    Args:
+        signals: DataFrame with date, close, position columns
+        fee_bps: Fee in basis points (roundtrip)
+        slippage_bps: Slippage in basis points (roundtrip)
+        return_diag: If True, include diagnostic arrays for event tracing
+
     Returns dict with performance metrics.
+    If return_diag=True, also includes:
+        - _diag_dates: pd.DatetimeIndex aligned to bars
+        - _diag_strat_ret_raw: np.ndarray float64 BEFORE clip
+        - _diag_strat_ret: np.ndarray float64 AFTER clip
+        - _diag_clamp_flag: np.ndarray int8 (1 where clipped)
+        - _diag_position: np.ndarray float64
+        - _diag_costs: np.ndarray float64
+        - _diag_equity: np.ndarray float64 (cum_ret)
+        - _diag_close: np.ndarray float64
     """
     df = signals.copy()
 
@@ -451,9 +467,10 @@ def backtest_symbol(
     # Strategy returns
     # Clip strat_ret to -1.0 to prevent (1+strat_ret) < 0
     # This handles edge cases where ret=-1 (close->0) plus costs would cause negative equity
-    df["strat_ret"] = df["position"].shift(1).fillna(0) * df["ret"] - df["costs"]
-    strat_ret_clamp_count = int((df["strat_ret"] < -1.0).sum())
-    df["strat_ret"] = df["strat_ret"].clip(lower=-1.0)
+    df["strat_ret_raw"] = df["position"].shift(1).fillna(0) * df["ret"] - df["costs"]
+    clamp_mask = df["strat_ret_raw"] < -1.0
+    strat_ret_clamp_count = int(clamp_mask.sum())
+    df["strat_ret"] = df["strat_ret_raw"].clip(lower=-1.0)
 
     # Cumulative returns (clip to 0 as safety net - should not be needed after strat_ret clip)
     df["cum_ret"] = (1 + df["strat_ret"]).cumprod()
@@ -514,7 +531,7 @@ def backtest_symbol(
     sign_flip = (prev_pos * pos) < 0  # Different signs = flip
     trades = (new_entry | sign_flip).sum()
 
-    return {
+    result = {
         "cagr": cagr,
         "sharpe": sharpe,
         "mdd": mdd,
@@ -529,6 +546,19 @@ def backtest_symbol(
         "_cum_ret": df["cum_ret"],  # For invariant validation
         "_signals_df": df,  # For debug dump
     }
+
+    # Add diagnostic arrays if requested (for Stage4 event tracing)
+    if return_diag:
+        result["_diag_dates"] = pd.to_datetime(df["date"])
+        result["_diag_strat_ret_raw"] = df["strat_ret_raw"].values.astype(np.float64)
+        result["_diag_strat_ret"] = df["strat_ret"].values.astype(np.float64)
+        result["_diag_clamp_flag"] = clamp_mask.values.astype(np.int8)
+        result["_diag_position"] = df["position"].values.astype(np.float64)
+        result["_diag_costs"] = df["costs"].values.astype(np.float64)
+        result["_diag_equity"] = df["cum_ret"].values.astype(np.float64)
+        result["_diag_close"] = df["close"].values.astype(np.float64)
+
+    return result
 
 
 def aggregate_symbol_results(

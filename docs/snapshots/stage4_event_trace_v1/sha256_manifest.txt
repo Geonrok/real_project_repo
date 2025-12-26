@@ -1,0 +1,7 @@
+# SHA256 Manifest for Stage4_event_trace_v1
+# Generated: 2025-12-26T12:54:55Z
+# Git commit: 9d346e18d6d4fdc57de265eea82ac4f53c886b33
+#
+c68d3ddfd2be19555783d2f1c8555d1aa7a3ac45941f41d0f672bfa6f71bc522  run_metadata.json
+17c8e2426175aed5328b6916c5c86db286aa408aa6866e73138afbf3219ee8ed  stage4_event_trace.csv
+c2a44a09f63b0f1dc4fbc6d5b34c3f1bba8b68c910cb5f8a46e6f1772e1e71b1  stage4_event_trace.md

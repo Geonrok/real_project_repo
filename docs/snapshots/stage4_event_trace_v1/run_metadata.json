@@ -1,0 +1,18 @@
+{
+  "stage": "stage4_event_trace_v1",
+  "purpose": "Trace clamp-only WARN events to concrete symbol/date evidence",
+  "created_utc": "2025-12-26T12:54:55Z",
+  "git_commit": "9d346e18d6d4fdc57de265eea82ac4f53c886b33",
+  "command": "scripts\\run_stage4_trace.cmd",
+  "environment": {
+    "python": "3.14.2",
+    "platform": "Windows"
+  },
+  "results_summary": {
+    "total_events": 13,
+    "traced_count": 13,
+    "review_count": 0,
+    "strategies_count": 13,
+    "symbols_count": 1
+  }
+}
