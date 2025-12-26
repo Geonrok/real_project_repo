@@ -61,6 +61,11 @@ class BacktestResult:
     days: int
     valid: bool = True  # False if any invariant violated
     violations: str = ""  # Comma-separated violation codes
+    # Diagnostic counters for Stage2 data quality
+    zero_close_count: int = 0
+    ret_inf_count: int = 0
+    strat_ret_clamp_count: int = 0
+    cumret_clip_count: int = 0
 
 
 def validate_metrics_invariants(
@@ -427,9 +432,13 @@ def backtest_symbol(
     """
     df = signals.copy()
 
+    # Diagnostic counters for Stage2 data quality
+    zero_close_count = int(((df["close"] <= 0) | df["close"].isna()).sum())
+
     # Daily returns
     # Handle edge cases: NaN (first bar), inf (0->positive), -inf (negative price)
     df["ret"] = df["close"].pct_change().fillna(0)
+    ret_inf_count = int(np.isinf(df["ret"]).sum())
     df["ret"] = df["ret"].replace([np.inf, -np.inf], 0)
 
     # Position change for cost calculation
@@ -443,10 +452,12 @@ def backtest_symbol(
     # Clip strat_ret to -1.0 to prevent (1+strat_ret) < 0
     # This handles edge cases where ret=-1 (close->0) plus costs would cause negative equity
     df["strat_ret"] = df["position"].shift(1).fillna(0) * df["ret"] - df["costs"]
+    strat_ret_clamp_count = int((df["strat_ret"] < -1.0).sum())
     df["strat_ret"] = df["strat_ret"].clip(lower=-1.0)
 
     # Cumulative returns (clip to 0 as safety net - should not be needed after strat_ret clip)
     df["cum_ret"] = (1 + df["strat_ret"]).cumprod()
+    cumret_clip_count = int((df["cum_ret"] < 0).sum())
     df["cum_ret"] = df["cum_ret"].clip(lower=0.0)
 
     # Performance metrics
@@ -510,6 +521,11 @@ def backtest_symbol(
         "win_rate": win_rate,
         "turnover": turnover,
         "trades": int(trades),
+        # Diagnostic counters for Stage2 data quality
+        "zero_close_count": zero_close_count,
+        "ret_inf_count": ret_inf_count,
+        "strat_ret_clamp_count": strat_ret_clamp_count,
+        "cumret_clip_count": cumret_clip_count,
         "_cum_ret": df["cum_ret"],  # For invariant validation
         "_signals_df": df,  # For debug dump
     }
@@ -532,6 +548,10 @@ def aggregate_symbol_results(
             "win_rate": 0.0,
             "turnover": 0.0,
             "trades": 0,
+            "zero_close_count": 0,
+            "ret_inf_count": 0,
+            "strat_ret_clamp_count": 0,
+            "cumret_clip_count": 0,
         }
 
     if weights is None:
@@ -544,6 +564,11 @@ def aggregate_symbol_results(
         "win_rate": sum(r["win_rate"] * w for r, w in zip(symbol_results, weights)),
         "turnover": sum(r["turnover"] * w for r, w in zip(symbol_results, weights)),
         "trades": sum(r["trades"] for r in symbol_results),
+        # Diagnostic counters (sum across symbols)
+        "zero_close_count": sum(r.get("zero_close_count", 0) for r in symbol_results),
+        "ret_inf_count": sum(r.get("ret_inf_count", 0) for r in symbol_results),
+        "strat_ret_clamp_count": sum(r.get("strat_ret_clamp_count", 0) for r in symbol_results),
+        "cumret_clip_count": sum(r.get("cumret_clip_count", 0) for r in symbol_results),
     }
 
     return agg
@@ -695,6 +720,10 @@ def run_strategy_backtest(
         days=days,
         valid=is_valid,
         violations=",".join(sorted(violations_list)),  # Sort for determinism
+        zero_close_count=agg.get("zero_close_count", 0),
+        ret_inf_count=agg.get("ret_inf_count", 0),
+        strat_ret_clamp_count=agg.get("strat_ret_clamp_count", 0),
+        cumret_clip_count=agg.get("cumret_clip_count", 0),
     )
 
 
@@ -933,6 +962,10 @@ def run_strategy_backtest_preloaded(
         days=days,
         valid=is_valid,
         violations=",".join(sorted(violations_list)),  # Sort for determinism
+        zero_close_count=agg.get("zero_close_count", 0),
+        ret_inf_count=agg.get("ret_inf_count", 0),
+        strat_ret_clamp_count=agg.get("strat_ret_clamp_count", 0),
+        cumret_clip_count=agg.get("cumret_clip_count", 0),
     )
 
 
