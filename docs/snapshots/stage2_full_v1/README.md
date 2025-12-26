@@ -6,6 +6,16 @@ This snapshot provides reproducibility evidence for Stage2 verification results.
 
 - `run_metadata.json`: Execution context (git commit, command, environment, results summary)
 - `sha256_manifest.txt`: SHA256 hashes of all output CSV/JSON/MD files
+- `stage2_final_pass.csv`: Final candidates that passed all criteria strictly
+- `stage2_final_pass_with_warn.csv`: Final candidates including WARN status (for research)
+
+## WARN Channel (Stage2.1)
+
+The WARN channel identifies strategies with `EXTREME_RETURN_CLAMP_ONLY` status:
+- These strategies experienced extreme single-bar returns that got clipped
+- But equity curve remained positive (no cumulative return floor clip)
+- Treated as acceptable for research candidate selection
+- Revisit for live trading gates
 
 ## Verification
 

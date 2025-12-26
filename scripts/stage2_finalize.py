@@ -58,10 +58,19 @@ def generate_metadata(stage2_dir: Path) -> dict:
     quality_rows = sum(1 for _ in open(quality)) - 1 if quality.exists() else 0
 
     final_candidates = 0
+    final_with_warn = 0
+    dq_passed = 0
+    dq_warned = 0
+    dq_failed = 0
     if gate.exists():
         with open(gate) as f:
             gate_data = json.load(f)
             final_candidates = gate_data.get("final_candidates_count", 0)
+            final_with_warn = gate_data.get("final_with_warn_count", 0)
+            dq = gate_data.get("criteria", {}).get("data_quality", {})
+            dq_passed = dq.get("passed_count", 0)
+            dq_warned = dq.get("warned_count", 0)
+            dq_failed = dq.get("failed_count", 0)
 
     return {
         "stage": "stage2_full_v1",
@@ -77,7 +86,11 @@ def generate_metadata(stage2_dir: Path) -> dict:
             "sensitivity_rows": sens_rows,
             "stress_rows": stress_rows,
             "quality_rows": quality_rows,
-            "final_candidates": final_candidates,
+            "final_candidates_strict": final_candidates,
+            "final_candidates_with_warn": final_with_warn,
+            "data_quality_passed": dq_passed,
+            "data_quality_warned": dq_warned,
+            "data_quality_failed": dq_failed,
         }
     }
 
@@ -96,12 +109,18 @@ def generate_manifest(stage2_dir: Path) -> list[tuple[str, str]]:
 
 
 def copy_to_snapshots(stage2_dir: Path):
-    """Copy metadata files to docs/snapshots."""
+    """Copy metadata and final candidate files to docs/snapshots."""
     snapshots_dir = Path("docs/snapshots/stage2_full_v1")
     snapshots_dir.mkdir(parents=True, exist_ok=True)
 
-    # Copy files
+    # Copy metadata files
     for fname in ["run_metadata.json", "sha256_manifest.txt"]:
+        src = stage2_dir / fname
+        if src.exists():
+            shutil.copy2(src, snapshots_dir / fname)
+
+    # Copy final candidate CSVs
+    for fname in ["stage2_final_pass.csv", "stage2_final_pass_with_warn.csv"]:
         src = stage2_dir / fname
         if src.exists():
             shutil.copy2(src, snapshots_dir / fname)
@@ -116,6 +135,16 @@ This snapshot provides reproducibility evidence for Stage2 verification results.
 
 - `run_metadata.json`: Execution context (git commit, command, environment, results summary)
 - `sha256_manifest.txt`: SHA256 hashes of all output CSV/JSON/MD files
+- `stage2_final_pass.csv`: Final candidates that passed all criteria strictly
+- `stage2_final_pass_with_warn.csv`: Final candidates including WARN status (for research)
+
+## WARN Channel (Stage2.1)
+
+The WARN channel identifies strategies with `EXTREME_RETURN_CLAMP_ONLY` status:
+- These strategies experienced extreme single-bar returns that got clipped
+- But equity curve remained positive (no cumulative return floor clip)
+- Treated as acceptable for research candidate selection
+- Revisit for live trading gates
 
 ## Verification
 
@@ -182,7 +211,11 @@ def main() -> int:
 
     print("\n[SUMMARY]")
     print(f"  Files in manifest: {len(manifest)}")
-    print(f"  Final candidates: {metadata['results_summary']['final_candidates']}")
+    results = metadata["results_summary"]
+    print(f"  Final candidates (strict): {results['final_candidates_strict']}")
+    print(f"  Final candidates (with WARN): {results['final_candidates_with_warn']}")
+    print(f"  Data quality: PASS={results['data_quality_passed']}, "
+          f"WARN={results['data_quality_warned']}, FAIL={results['data_quality_failed']}")
 
     return 0
 

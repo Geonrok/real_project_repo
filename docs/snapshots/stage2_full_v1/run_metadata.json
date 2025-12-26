@@ -1,8 +1,8 @@
 {
   "stage": "stage2_full_v1",
   "purpose": "Robust candidate verification (sensitivity, window stress, data quality)",
-  "created_utc": "2025-12-26T11:16:41Z",
-  "git_commit": "3ac87d4255db0b9c85080d3ed2de3d7f6e73d2e5",
+  "created_utc": "2025-12-26T12:21:03Z",
+  "git_commit": "ffafc18ad59f65857a49deba421dbb16ccb77590",
   "command": "scripts\\run_stage2_all.cmd",
   "environment": {
     "python": "3.14.2",
@@ -12,6 +12,10 @@
     "sensitivity_rows": 288,
     "stress_rows": 180,
     "quality_rows": 72,
-    "final_candidates": 5
+    "final_candidates_strict": 5,
+    "final_candidates_with_warn": 18,
+    "data_quality_passed": 5,
+    "data_quality_warned": 13,
+    "data_quality_failed": 0
   }
 }
