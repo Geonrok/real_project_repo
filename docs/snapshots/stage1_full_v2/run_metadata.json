@@ -1,0 +1,23 @@
+{
+  "stage": "stage1_full_v2",
+  "purpose": "Full Stage1 backtest with strat_ret clamp fix (invariant 0 violations)",
+  "created_utc": "2025-12-26T06:34:23Z",
+  "git_commit": "35cd0562952e6ef1ab8cd128b7bddcf7637e5105",
+  "command": "..\\.venv\\Scripts\\python.exe scripts/backtest_runner.py --markets configs/markets.yaml --normalized-dir outputs/normalized_1d --grid configs/grid_stage1.yaml --out outputs/stage1_full_v2 --eval-mode both",
+  "gate_command": "..\\.venv\\Scripts\\python.exe scripts/backtest_runner.py --markets configs/markets.yaml --normalized-dir outputs/normalized_1d --grid configs/grid_stage1.yaml --out outputs/stage1_full_v2 --eval-mode both --fail-on-invariant",
+  "environment": {
+    "python": "3.14.2",
+    "pandas": "2.3.3",
+    "numpy": "2.4.0",
+    "platform": "Windows"
+  },
+  "results_summary": {
+    "markets": ["upbit_krw", "bithumb_krw", "binance_spot", "binance_futures"],
+    "total_strategies": 280,
+    "valid_strategies": 280,
+    "invariant_violations": 0,
+    "top20_rows": 80,
+    "robust_candidates_k3": 18
+  },
+  "key_fix": "strat_ret clipped to -1.0 to prevent negative equity when ret=-1 (close->0) plus costs"
+}

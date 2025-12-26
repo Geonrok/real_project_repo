@@ -1,0 +1,13 @@
+# SHA256 Manifest for Stage1_full_v2
+# Generated: 2025-12-26T06:34:23Z
+# Git commit: 35cd0562952e6ef1ab8cd128b7bddcf7637e5105
+#
+# Format: sha256  filename
+# Files sorted alphabetically
+
+e9a9d3393f4dda200e5d861a664dd776f88a942da925de641a9253c0c2f5933f  candidates_robust_kof4_top20.csv
+afe60f0462f2bd0774f3ddcbf4c6e2166788244f34f9783aa65c3a402d5fc034  candidates_top20_by_market.csv
+ae2ace34e7ef9683d7ce47102a43e8372c20df2fb4b7903470f4b2589837a3fc  candidates_top20_intersection.csv
+c33e9f89135120702e2cea5097a8cb36ba81f868dcfcd7b60436d4e304ed6754  stage1_intersection_summary.csv
+bff6cf6d3118bc815cc1f1aa8b7db27a14913fcd31ebf0d8cf7472c4bac5643a  stage1_summary.csv
+495d3266a806ba3787a84b8fcc1725a85b6a667f43307375680d9ebdf7bf34f0  stage1_top20.csv
