@@ -1,0 +1,21 @@
+{
+  "stage": "stage3_rootcause_v1",
+  "purpose": "Clamp root-cause analysis for Stage2 failed strategies",
+  "created_utc": "2025-12-26T11:52:41Z",
+  "git_commit": "ffafc18ad59f65857a49deba421dbb16ccb77590",
+  "command": "scripts\\run_stage3_all.cmd",
+  "environment": {
+    "python": "3.14.2",
+    "platform": "Windows"
+  },
+  "inputs": {
+    "stage2_dir": "outputs/stage2_full_v1",
+    "stage1_dir": "outputs/stage1_full_v2"
+  },
+  "results_summary": {
+    "rootcause_rows": 13,
+    "root_cause_distribution": {
+      "EXTREME_RETURN_CLAMP_ONLY": 13
+    }
+  }
+}
