@@ -1,0 +1,32 @@
+{
+  "git_commit": "f7e79b6315dc149afd3181a219976216a3c12946",
+  "timestamp_utc": "2025-12-27T02:56:52.252980+00:00",
+  "command": "scripts\\stage6_finalize.py --stage6-dir outputs\\stage6_live_gate_v1 --out-dir docs\\final --snapshot-dir docs\\snapshots\\final_candidates_v4_live_gate",
+  "source_files": {
+    "stage6_live_gate": "outputs\\stage6_live_gate_v1\\stage6_live_gate.csv"
+  },
+  "counts": {
+    "live_pass": 0,
+    "live_fail": 18,
+    "live_inconclusive": 54,
+    "unique_pass_strategies": 0
+  },
+  "market_summary": {
+    "binance_futures": {
+      "LIVE_FAIL": 0,
+      "LIVE_INCONCLUSIVE": 18
+    },
+    "binance_spot": {
+      "LIVE_FAIL": 18,
+      "LIVE_INCONCLUSIVE": 0
+    },
+    "bithumb_krw": {
+      "LIVE_FAIL": 0,
+      "LIVE_INCONCLUSIVE": 18
+    },
+    "upbit_krw": {
+      "LIVE_FAIL": 0,
+      "LIVE_INCONCLUSIVE": 18
+    }
+  }
+}
