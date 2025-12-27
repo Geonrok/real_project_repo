@@ -1,0 +1,21 @@
+{
+  "git_commit": "f7e79b6315dc149afd3181a219976216a3c12946",
+  "timestamp_utc": "2025-12-27T02:55:24.742857+00:00",
+  "command": "scripts\\stage6_live_gate.py --stage2-dir outputs\\stage2_full_v3_ca --out outputs\\stage6_live_gate_v1",
+  "config": {
+    "min_trades_per_window": 10,
+    "require_sharpe_positive": true,
+    "max_mdd": -0.6,
+    "research_mode": false
+  },
+  "source_files": {
+    "sensitivity": "outputs\\stage2_full_v3_ca\\stage2_sensitivity.csv",
+    "window_stress": "outputs\\stage2_full_v3_ca\\stage2_window_stress.csv"
+  },
+  "counts": {
+    "total_combinations": 72,
+    "live_pass": 0,
+    "live_fail": 18,
+    "live_inconclusive": 54
+  }
+}
